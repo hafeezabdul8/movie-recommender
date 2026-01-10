@@ -56,10 +56,13 @@ st.set_page_config(
 )
 
 # ────────────────────────────────────────────────────────────────
-# Initialize session state for watchlist
+# Initialize session state for watchlist AND user ratings
 # ────────────────────────────────────────────────────────────────
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
+
+if 'user_ratings' not in st.session_state:
+    st.session_state.user_ratings = {}  # movie_id: rating (1-5)
 
 # ────────────────────────────────────────────────────────────────
 # TMDB Configuration
@@ -225,16 +228,16 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_g
     return recommendations, selected_title, None
 
 # ────────────────────────────────────────────────────────────────
-# Main UI with Watchlist
+# Main UI with Watchlist & User Ratings
 # ────────────────────────────────────────────────────────────────
 def main():
     st.title("🎬 FEEZMAN MOVIE RECOMMENDER")
-    st.markdown("Find movies you'll love – with posters, trailers & watchlist!")
+    st.markdown("Rate movies, build your watchlist & find new favorites!")
     
     df, all_genres = load_and_prepare_data()
     cosine_sim, df_indexed = build_similarity_matrix(df)
     
-    # Sidebar: Watchlist
+    # Sidebar: Watchlist + User Ratings Summary
     with st.sidebar:
         st.header("My Watchlist ❤️")
         if st.session_state.watchlist:
@@ -244,9 +247,25 @@ def main():
                 poster = get_poster_url(movie['id'])
                 if poster:
                     st.image(poster, width=100)
+            
+            if st.button("🗑️ Clear Watchlist"):
+                st.session_state.watchlist = []
+                st.success("Watchlist cleared!")
+                st.rerun()
         else:
             st.info("Your watchlist is empty – add some movies!")
-    
+        
+        st.markdown("---")
+        st.header("My Ratings")
+        if st.session_state.user_ratings:
+            for movie_id, rating in st.session_state.user_ratings.items():
+                movie = df[df['id'] == movie_id]
+                if not movie.empty:
+                    title = movie['title'].iloc[0]
+                    st.markdown(f"- **{title}**: {'★' * rating}")
+        else:
+            st.info("Rate some movies to see your personal ratings!")
+
     movie_list = sorted(df['title'].unique().tolist())
     movie_title = st.selectbox("Choose or type a movie:", options=movie_list)
     
@@ -317,10 +336,23 @@ def main():
                             if st.button("❤️ Add to Watchlist", key=f"add_{movie_id}_{i}"):
                                 st.session_state.watchlist.append(movie_id)
                                 st.success(f"Added **{movie_title}**!")
+                                st.rerun()
                         else:
                             if st.button("💔 Remove", key=f"remove_{movie_id}_{i}"):
                                 st.session_state.watchlist.remove(movie_id)
                                 st.success(f"Removed **{movie_title}**!")
+                                st.rerun()
+                        
+                        # User Rating (1-5 stars)
+                        current_rating = st.session_state.user_ratings.get(movie_id, 0)
+                        st.markdown("**Your rating:**")
+                        cols_rating = st.columns(5)
+                        for star in range(1, 6):
+                            with cols_rating[star-1]:
+                                if st.button(f"{'★' if star <= current_rating else '☆'}", key=f"rate_{movie_id}_{star}_{i}"):
+                                    st.session_state.user_ratings[movie_id] = star
+                                    st.success(f"Rated **{movie_title}** {star} stars!")
+                                    st.rerun()
                         
                         st.markdown('</div>', unsafe_allow_html=True)
 
