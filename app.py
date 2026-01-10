@@ -11,10 +11,7 @@ import json
 # ────────────────────────────────────────────────────────────────
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #0e1117;
-        color: #e0e0e0;
-    }
+    .stApp { background-color: #0e1117; color: #e0e0e0; }
     .movie-card {
         background: #1e1e2e;
         border-radius: 12px;
@@ -23,29 +20,10 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.4);
         transition: transform 0.2s;
     }
-    .movie-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-    }
-    .block-container {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-        max-width: none !important;
-    }
-    img {
-        border-radius: 8px;
-        object-fit: cover;
-        width: 100%;
-        height: auto;
-    }
-    .stButton > button {
-        background-color: #ff4b4b;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 20px;
-        margin-top: 8px;
-    }
+    .movie-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.5); }
+    .block-container { padding-left: 1rem !important; padding-right: 1rem !important; max-width: none !important; }
+    img { border-radius: 8px; object-fit: cover; width: 100%; height: auto; }
+    .stButton > button { background-color: #ff4b4b; color: white; border: none; border-radius: 8px; padding: 10px 20px; margin-top: 8px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -56,7 +34,7 @@ st.set_page_config(
 )
 
 # ────────────────────────────────────────────────────────────────
-# Initialize session state for watchlist AND user ratings
+# Initialize session state
 # ────────────────────────────────────────────────────────────────
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
@@ -65,14 +43,14 @@ if 'user_ratings' not in st.session_state:
     st.session_state.user_ratings = {}  # movie_id: rating (1-5)
 
 # ────────────────────────────────────────────────────────────────
-# TMDB Configuration
+# TMDB Config
 # ────────────────────────────────────────────────────────────────
 TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 YOUTUBE_BASE = "https://www.youtube.com/watch?v="
 
 # ────────────────────────────────────────────────────────────────
-# Mood → Genre Boost Mapping
+# Mood mapping (keep your existing)
 # ────────────────────────────────────────────────────────────────
 MOOD_TO_GENRES = {
     'happy': {'comedy': 1.8, 'animation': 1.5, 'adventure': 1.3, 'musical': 1.5},
@@ -96,7 +74,7 @@ def detect_mood_keywords(mood_text):
     return detected
 
 # ────────────────────────────────────────────────────────────────
-# Load & prepare data
+# Load data
 # ────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_and_prepare_data():
@@ -139,7 +117,7 @@ def build_similarity_matrix(df):
     return cosine_sim, df.reset_index(drop=True)
 
 # ────────────────────────────────────────────────────────────────
-# Get poster
+# Poster & Trailer
 # ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400)
 def get_poster_url(movie_id):
@@ -154,9 +132,6 @@ def get_poster_url(movie_id):
         pass
     return None
 
-# ────────────────────────────────────────────────────────────────
-# Get trailer
-# ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400)
 def get_trailer_url(movie_id):
     try:
@@ -228,16 +203,16 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_g
     return recommendations, selected_title, None
 
 # ────────────────────────────────────────────────────────────────
-# Main UI with Watchlist & User Ratings
+# Main UI
 # ────────────────────────────────────────────────────────────────
 def main():
     st.title("🎬 FEEZMAN MOVIE RECOMMENDER")
-    st.markdown("Rate movies, build your watchlist & find new favorites!")
+    st.markdown("Rate, save to watchlist & discover movies!")
     
     df, all_genres = load_and_prepare_data()
     cosine_sim, df_indexed = build_similarity_matrix(df)
     
-    # Sidebar: Watchlist + User Ratings Summary
+    # Sidebar: Watchlist & Ratings
     with st.sidebar:
         st.header("My Watchlist ❤️")
         if st.session_state.watchlist:
@@ -264,7 +239,7 @@ def main():
                     title = movie['title'].iloc[0]
                     st.markdown(f"- **{title}**: {'★' * rating}")
         else:
-            st.info("Rate some movies to see your personal ratings!")
+            st.info("Rate some movies!")
 
     movie_list = sorted(df['title'].unique().tolist())
     movie_title = st.selectbox("Choose or type a movie:", options=movie_list)
@@ -328,7 +303,7 @@ def main():
                         else:
                             st.caption("No trailer available")
                         
-                        # Watchlist button
+                        # Watchlist button with rerun
                         movie_id = row['id']
                         movie_title = row['title']
                         
