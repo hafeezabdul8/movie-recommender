@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import requests
-import json  # Required for parsing genres JSON
+import json
 
 # ────────────────────────────────────────────────────────────────
 # Modern dark theme + responsive styling
@@ -56,6 +56,12 @@ st.set_page_config(
 )
 
 # ────────────────────────────────────────────────────────────────
+# Initialize session state for watchlist
+# ────────────────────────────────────────────────────────────────
+if 'watchlist' not in st.session_state:
+    st.session_state.watchlist = []
+
+# ────────────────────────────────────────────────────────────────
 # TMDB Configuration
 # ────────────────────────────────────────────────────────────────
 TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
@@ -87,12 +93,11 @@ def detect_mood_keywords(mood_text):
     return detected
 
 # ────────────────────────────────────────────────────────────────
-# Load data & prepare genres correctly
+# Load & prepare data
 # ────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_and_prepare_data():
     df = pd.read_csv('tmdb_5000_movies.csv')
-    
     useful_cols = ['id', 'title', 'genres', 'overview', 'keywords', 'vote_average', 'vote_count']
     df = df[useful_cols]
     
@@ -100,7 +105,6 @@ def load_and_prepare_data():
     df['genres'] = df['genres'].fillna('[]')
     df['keywords'] = df['keywords'].fillna('[]')
     
-    # Parse genres JSON and extract clean names
     def extract_genre_names(json_str):
         try:
             genres_list = json.loads(json_str)
@@ -110,7 +114,6 @@ def load_and_prepare_data():
     
     df['genre_names'] = df['genres'].apply(extract_genre_names)
     
-    # Clean text for similarity features
     def clean_text(text):
         return text.lower().replace(',', ' ').replace('"', '').replace("'", '')
     
@@ -121,7 +124,6 @@ def load_and_prepare_data():
     df['combined_features'] = df['genres_clean'] + ' ' + df['overview'] + ' ' + df['keywords']
     df = df[df['combined_features'].str.strip() != '']
     
-    # Get unique clean genres for dropdown
     all_genres = sorted(set(genre for genres in df['genre_names'] for genre in genres))
     
     return df, all_genres
@@ -134,7 +136,7 @@ def build_similarity_matrix(df):
     return cosine_sim, df.reset_index(drop=True)
 
 # ────────────────────────────────────────────────────────────────
-# Get poster from TMDB API (live)
+# Get poster
 # ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400)
 def get_poster_url(movie_id):
@@ -150,7 +152,7 @@ def get_poster_url(movie_id):
     return None
 
 # ────────────────────────────────────────────────────────────────
-# Get trailer URL
+# Get trailer
 # ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400)
 def get_trailer_url(movie_id):
@@ -174,7 +176,7 @@ def get_trailer_url(movie_id):
     return None
 
 # ────────────────────────────────────────────────────────────────
-# Recommendation with mood & genre filter
+# Recommendation function
 # ────────────────────────────────────────────────────────────────
 def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_genres=None):
     title_clean = title.lower().strip()
@@ -207,7 +209,6 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_g
         combined_scores = [0.7 * s + 0.3 * mood_boost_scores[i] for i, s in sim_scores]
         sim_scores = list(enumerate(combined_scores))
     
-    # Genre filter
     if selected_genres:
         genre_mask = df['genres_clean'].apply(lambda x: any(g in x for g in selected_genres))
         sim_scores = [s for s in sim_scores if genre_mask[s[0]]]
@@ -224,25 +225,36 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_g
     return recommendations, selected_title, None
 
 # ────────────────────────────────────────────────────────────────
-# Main UI
+# Main UI with Watchlist
 # ────────────────────────────────────────────────────────────────
 def main():
     st.title("🎬 FEEZMAN MOVIE RECOMMENDER")
-    st.markdown("Search by movie + genres, mood & trailers!")
+    st.markdown("Find movies you'll love – with posters, trailers & watchlist!")
     
     df, all_genres = load_and_prepare_data()
     cosine_sim, df_indexed = build_similarity_matrix(df)
     
+    # Sidebar: Watchlist
+    with st.sidebar:
+        st.header("My Watchlist ❤️")
+        if st.session_state.watchlist:
+            watchlist_df = df[df['id'].isin(st.session_state.watchlist)]
+            for _, movie in watchlist_df.iterrows():
+                st.markdown(f"- **{movie['title']}** (★ {movie['vote_average']:.1f})")
+                poster = get_poster_url(movie['id'])
+                if poster:
+                    st.image(poster, width=100)
+        else:
+            st.info("Your watchlist is empty – add some movies!")
+    
     movie_list = sorted(df['title'].unique().tolist())
     movie_title = st.selectbox("Choose or type a movie:", options=movie_list)
     
-    # Fixed genre multi-select - shows clean names
     selected_genres = st.multiselect(
         "Filter by genres (optional)",
         options=all_genres,
         default=[],
-        format_func=lambda x: x.title(),  # Capitalize for better look
-        help="Only show recommendations matching these genres"
+        format_func=lambda x: x.title()
     )
     
     mood_input = st.text_input("How are you feeling? (optional)", "")
@@ -268,7 +280,6 @@ def main():
                 note_str = f" ({' + '.join(notes)})" if notes else ""
                 st.subheader(f"Movies similar to: **{selected_title}**{note_str}")
                 
-                # Responsive columns
                 screen_width = st.session_state.get('screen_width', 1200)
                 num_cols = 4 if screen_width >= 1024 else 3 if screen_width >= 768 else 2 if screen_width >= 480 else 1
                 
@@ -297,6 +308,19 @@ def main():
                             st.markdown(f"[Watch Trailer 🎥]({trailer_url})", unsafe_allow_html=True)
                         else:
                             st.caption("No trailer available")
+                        
+                        # Watchlist button
+                        movie_id = row['id']
+                        movie_title = row['title']
+                        
+                        if movie_id not in st.session_state.watchlist:
+                            if st.button("❤️ Add to Watchlist", key=f"add_{movie_id}_{i}"):
+                                st.session_state.watchlist.append(movie_id)
+                                st.success(f"Added **{movie_title}**!")
+                        else:
+                            if st.button("💔 Remove", key=f"remove_{movie_id}_{i}"):
+                                st.session_state.watchlist.remove(movie_id)
+                                st.success(f"Removed **{movie_title}**!")
                         
                         st.markdown('</div>', unsafe_allow_html=True)
 
