@@ -6,33 +6,65 @@ from sklearn.metrics.pairwise import cosine_similarity
 import requests
 import json
 
-# Modern dark theme
+# ────────────────────────────────────────────────────────────────
+# Modern dark theme + responsive styling
+# ────────────────────────────────────────────────────────────────
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: #e0e0e0; }
-    .movie-card { background: #1e1e2e; border-radius: 12px; padding: 12px; margin: 8px 0; box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: transform 0.2s; }
-    .movie-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.5); }
-    .block-container { padding-left: 1rem !important; padding-right: 1rem !important; max-width: none !important; }
-    img { border-radius: 8px; object-fit: cover; width: 100%; height: auto; }
-    .stButton > button { background-color: #ff4b4b; color: white; border: none; border-radius: 8px; padding: 10px 20px; margin-top: 8px; }
+    .stApp {
+        background-color: #0e1117;
+        color: #e0e0e0;
+    }
+    .movie-card {
+        background: #1e1e2e;
+        border-radius: 12px;
+        padding: 12px;
+        margin: 8px 0;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        transition: transform 0.2s;
+    }
+    .movie-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    }
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: none !important;
+    }
+    img {
+        border-radius: 8px;
+        object-fit: cover;
+        width: 100%;
+        height: auto;
+    }
+    .stButton > button {
+        background-color: #ff4b4b;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 20px;
+        margin-top: 8px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="Feezman Movie Recommender", layout="wide", initial_sidebar_state="auto")
+st.set_page_config(
+    page_title="Feezman Movie Recommender",
+    layout="wide",
+    initial_sidebar_state="auto"
+)
 
-# Initialize session state
-if 'watchlist' not in st.session_state:
-    st.session_state.watchlist = []
-
-if 'user_ratings' not in st.session_state:
-    st.session_state.user_ratings = {}
-
-# TMDB Config
+# ────────────────────────────────────────────────────────────────
+# TMDB Configuration
+# ────────────────────────────────────────────────────────────────
 TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 YOUTUBE_BASE = "https://www.youtube.com/watch?v="
 
-# Mood mapping
+# ────────────────────────────────────────────────────────────────
+# Mood → Genre Boost Mapping
+# ────────────────────────────────────────────────────────────────
 MOOD_TO_GENRES = {
     'happy': {'comedy': 1.8, 'animation': 1.5, 'adventure': 1.3, 'musical': 1.5},
     'sad': {'drama': 2.0, 'romance': 1.8, 'family': 1.5},
@@ -54,7 +86,10 @@ def detect_mood_keywords(mood_text):
             detected[mood] = boosts
     return detected
 
-# Load data - NO CACHE to fix update issue
+# ────────────────────────────────────────────────────────────────
+# Load & prepare data
+# ────────────────────────────────────────────────────────────────
+@st.cache_data
 def load_and_prepare_data():
     df = pd.read_csv('tmdb_5000_movies.csv')
     useful_cols = ['id', 'title', 'genres', 'overview', 'keywords', 'vote_average', 'vote_count']
@@ -87,12 +122,16 @@ def load_and_prepare_data():
     
     return df, all_genres
 
+@st.cache_data
 def build_similarity_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english', max_features=5000)
     tfidf_matrix = tfidf.fit_transform(df['combined_features'])
     cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
     return cosine_sim, df.reset_index(drop=True)
 
+# ────────────────────────────────────────────────────────────────
+# Get poster
+# ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400)
 def get_poster_url(movie_id):
     try:
@@ -106,6 +145,9 @@ def get_poster_url(movie_id):
         pass
     return None
 
+# ────────────────────────────────────────────────────────────────
+# Get trailer
+# ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400)
 def get_trailer_url(movie_id):
     try:
@@ -127,6 +169,9 @@ def get_trailer_url(movie_id):
         pass
     return None
 
+# ────────────────────────────────────────────────────────────────
+# Recommendation function
+# ────────────────────────────────────────────────────────────────
 def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_genres=None):
     title_clean = title.lower().strip()
     
@@ -173,43 +218,16 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_g
     
     return recommendations, selected_title, None
 
-# Main UI
+# ────────────────────────────────────────────────────────────────
+# Main UI (cleaned - no watchlist/ratings)
+# ────────────────────────────────────────────────────────────────
 def main():
     st.title("🎬 FEEZMAN MOVIE RECOMMENDER")
-    st.markdown("Rate, save & discover movies!")
+    st.markdown("Find movies you'll love – with posters, trailers, mood & genre search!")
     
     df, all_genres = load_and_prepare_data()
     cosine_sim, df_indexed = build_similarity_matrix(df)
     
-    # Sidebar: Watchlist & Ratings
-    with st.sidebar:
-        st.header("My Watchlist ❤️")
-        if st.session_state.watchlist:
-            watchlist_df = df[df['id'].isin(st.session_state.watchlist)]
-            for _, movie in watchlist_df.iterrows():
-                st.markdown(f"- **{movie['title']}** (★ {movie['vote_average']:.1f})")
-                poster = get_poster_url(movie['id'])
-                if poster:
-                    st.image(poster, width=100)
-            
-            if st.button("🗑️ Clear Watchlist"):
-                st.session_state.watchlist = []
-                st.success("Watchlist cleared!")
-                st.rerun()
-        else:
-            st.info("Your watchlist is empty – add some movies!")
-        
-        st.markdown("---")
-        st.header("My Ratings")
-        if st.session_state.user_ratings:
-            for movie_id, rating in st.session_state.user_ratings.items():
-                movie = df[df['id'] == movie_id]
-                if not movie.empty:
-                    title = movie['title'].iloc[0]
-                    st.markdown(f"- **{title}**: {'★' * rating}")
-        else:
-            st.info("Rate some movies!")
-
     movie_list = sorted(df['title'].unique().tolist())
     movie_title = st.selectbox("Choose or type a movie:", options=movie_list)
     
@@ -271,32 +289,6 @@ def main():
                             st.markdown(f"[Watch Trailer 🎥]({trailer_url})", unsafe_allow_html=True)
                         else:
                             st.caption("No trailer available")
-                        
-                        # Watchlist button
-                        movie_id = row['id']
-                        movie_title = row['title']
-                        
-                        if movie_id not in st.session_state.watchlist:
-                            if st.button("❤️ Add to Watchlist", key=f"add_watchlist_{movie_id}"):
-                                st.session_state.watchlist.append(movie_id)
-                                st.success(f"Added **{movie_title}** to Watchlist!")
-                                st.rerun()
-                        else:
-                            if st.button("💔 Remove from Watchlist", key=f"remove_watchlist_{movie_id}"):
-                                st.session_state.watchlist.remove(movie_id)
-                                st.success(f"Removed **{movie_title}** from Watchlist!")
-                                st.rerun()
-                        
-                        # User Rating
-                        current_rating = st.session_state.user_ratings.get(movie_id, 0)
-                        st.markdown("**Your rating:**")
-                        cols_rating = st.columns(5)
-                        for star in range(1, 6):
-                            with cols_rating[star-1]:
-                                if st.button(f"{'★' if star <= current_rating else '☆'}", key=f"rate_{movie_id}_{star}"):
-                                    st.session_state.user_ratings[movie_id] = star
-                                    st.success(f"Rated **{movie_title}** {star} stars!")
-                                    st.rerun()
                         
                         st.markdown('</div>', unsafe_allow_html=True)
 
