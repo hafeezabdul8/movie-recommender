@@ -6,14 +6,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 import requests
 
 # ────────────────────────────────────────────────────────────────
-# Modern dark theme + responsive styling
+# Modern dark theme + responsive cards
 # ────────────────────────────────────────────────────────────────
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #0e1117;
-        color: #e0e0e0;
-    }
+    .stApp { background-color: #0e1117; color: #e0e0e0; }
     .movie-card {
         background: #1e1e2e;
         border-radius: 12px;
@@ -22,47 +19,24 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.4);
         transition: transform 0.2s;
     }
-    .movie-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-    }
-    .block-container {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-        max-width: none !important;
-    }
-    img {
-        border-radius: 8px;
-        object-fit: cover;
-        width: 100%;
-        height: auto;
-    }
-    .stButton > button {
-        background-color: #ff4b4b;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 20px;
-        margin-top: 8px;
-    }
+    .movie-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.5); }
+    .block-container { padding-left: 1rem !important; padding-right: 1rem !important; max-width: none !important; }
+    img { border-radius: 8px; object-fit: cover; width: 100%; height: auto; }
+    .stButton > button { background-color: #ff4b4b; color: white; border: none; border-radius: 8px; padding: 10px 20px; margin-top: 8px; }
     </style>
 """, unsafe_allow_html=True)
 
-st.set_page_config(
-    page_title="Feezman Movie Recommender",
-    layout="wide",
-    initial_sidebar_state="auto"
-)
+st.set_page_config(page_title="Feezman Movie Recommender", layout="wide", initial_sidebar_state="auto")
 
 # ────────────────────────────────────────────────────────────────
-# TMDB Configuration - Using secrets (for deployed version)
+# TMDB Config - Using secrets
 # ────────────────────────────────────────────────────────────────
 TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 YOUTUBE_BASE = "https://www.youtube.com/watch?v="
 
 # ────────────────────────────────────────────────────────────────
-# Mood to Genre Boost Mapping
+# Mood → Genre Boost Mapping
 # ────────────────────────────────────────────────────────────────
 MOOD_TO_GENRES = {
     'happy': {'comedy': 1.8, 'animation': 1.5, 'adventure': 1.3, 'musical': 1.5},
@@ -86,7 +60,7 @@ def detect_mood_keywords(mood_text):
     return detected
 
 # ────────────────────────────────────────────────────────────────
-# Load & prepare data
+# Data loading & similarity
 # ────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_and_prepare_data():
@@ -108,11 +82,12 @@ def load_and_prepare_data():
     df['combined_features'] = df['genres'] + ' ' + df['overview'] + ' ' + df['keywords']
     df = df[df['combined_features'].str.strip() != '']
     
-    return df
+    # Extract unique genres for dropdown
+    df['genre_list'] = df['genres'].apply(lambda x: x.split())
+    all_genres = sorted(set(genre for sublist in df['genre_list'] for genre in sublist if genre))
+    
+    return df, all_genres
 
-# ────────────────────────────────────────────────────────────────
-# Build similarity matrix
-# ────────────────────────────────────────────────────────────────
 @st.cache_data
 def build_similarity_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english', max_features=5000)
@@ -121,9 +96,9 @@ def build_similarity_matrix(df):
     return cosine_sim, df.reset_index(drop=True)
 
 # ────────────────────────────────────────────────────────────────
-# Get current poster from TMDB API (live fetch)
+# Get current poster
 # ────────────────────────────────────────────────────────────────
-@st.cache_data(ttl=86400)  # Cache for 1 day
+@st.cache_data(ttl=86400)
 def get_poster_url(movie_id):
     try:
         url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
@@ -146,13 +121,11 @@ def get_trailer_url(movie_id):
         response = requests.get(url, timeout=5)
         data = response.json()
         results = data.get('results', [])
-        # Prefer official trailer
         for video in results:
             if video.get('site') == 'YouTube' and video.get('type') == 'Trailer':
                 key = video.get('key')
                 if key:
                     return f"https://www.youtube.com/watch?v={key}"
-        # Fallback to any YouTube video
         for video in results:
             if video.get('site') == 'YouTube':
                 key = video.get('key')
@@ -163,12 +136,12 @@ def get_trailer_url(movie_id):
     return None
 
 # ────────────────────────────────────────────────────────────────
-# Recommendation function with mood boost
+# Recommendation function with mood & genre filter
 # ────────────────────────────────────────────────────────────────
-def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None):
+def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_genres=None):
     title_clean = title.lower().strip()
     
-    # Try exact match
+    # Find base movie
     exact_match = df[df['title'].str.lower().str.strip() == title_clean]
     
     if not exact_match.empty:
@@ -176,10 +149,9 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None):
         selected_title = selected['title']
         idx = exact_match.index[0]
     else:
-        # Partial match, sorted by popularity
         partial_matches = df[df['title'].str.lower().str.contains(title_clean, na=False)]
         if partial_matches.empty:
-            return None, None, f"No movie found containing '{title}' 😢 Try 'Avatar', 'Inception', 'The Dark Knight'"
+            return None, None, f"No movie found containing '{title}' 😢"
         partial_matches = partial_matches.sort_values('vote_count', ascending=False)
         selected = partial_matches.iloc[0]
         selected_title = selected['title']
@@ -200,9 +172,17 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None):
         combined_scores = [0.7 * s + 0.3 * mood_boost_scores[i] for i, s in sim_scores]
         sim_scores = list(enumerate(combined_scores))
     
+    # Apply genre filter (only keep movies with at least one selected genre)
+    if selected_genres:
+        genre_mask = df['genres'].apply(lambda x: any(g in x for g in selected_genres))
+        sim_scores = [s for s in sim_scores if genre_mask[s[0]]]
+    
     # Sort & skip self
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
     sim_scores = [s for s in sim_scores if s[0] != idx][:n]
+    
+    if not sim_scores:
+        return None, selected_title, f"No recommendations found matching the selected genres 😔"
     
     movie_indices = [i[0] for i in sim_scores]
     recommendations = df.iloc[movie_indices]
@@ -210,20 +190,24 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None):
     return recommendations, selected_title, None
 
 # ────────────────────────────────────────────────────────────────
-# Main UI
+# Main UI with genre multi-select
 # ────────────────────────────────────────────────────────────────
 def main():
     st.title("🎬 FEEZMAN MOVIE RECOMMENDER")
-    st.markdown("Find movies you'll love – with real posters & trailers!")
+    st.markdown("Find movies you'll love – with posters, trailers & genre search!")
     
-    df = load_and_prepare_data()
+    df, all_genres = load_and_prepare_data()
     cosine_sim, df_indexed = build_similarity_matrix(df)
     
     movie_list = sorted(df['title'].unique().tolist())
-    movie_title = st.selectbox(
-        "Choose or type a movie you love:",
-        options=movie_list,
-        help="Start typing to search (e.g. Pirates of the Caribbean, Avatar)"
+    movie_title = st.selectbox("Choose or type a movie you love:", options=movie_list)
+    
+    # New: Genre multi-select
+    selected_genres = st.multiselect(
+        "Filter by genres (optional - choose one or more)",
+        options=all_genres,
+        default=[],
+        help="Only shows recommendations matching at least one selected genre (e.g. Horror, Comedy)"
     )
     
     mood_input = st.text_input("How are you feeling? (optional)", "")
@@ -235,15 +219,16 @@ def main():
         
         with st.spinner("Finding perfect matches..."):
             recommendations, selected_title, error = get_recommendations(
-                movie_title, df_indexed, cosine_sim, n_recs, mood_boosts
+                movie_title, df_indexed, cosine_sim, n_recs, mood_boosts, selected_genres
             )
             
             if error:
                 st.error(error)
             else:
-                st.subheader(f"Movies similar to: **{selected_title}**")
+                genre_note = f" (filtered to {', '.join(selected_genres)})" if selected_genres else ""
+                mood_note = f" + mood boost: {', '.join(mood_boosts.keys())}" if mood_boosts else ""
+                st.subheader(f"Movies similar to: **{selected_title}**{genre_note}{mood_note}")
                 
-                # Responsive columns
                 screen_width = st.session_state.get('screen_width', 1200)
                 num_cols = 4 if screen_width >= 1024 else 3 if screen_width >= 768 else 2 if screen_width >= 480 else 1
                 
@@ -254,7 +239,6 @@ def main():
                     with col:
                         st.markdown('<div class="movie-card">', unsafe_allow_html=True)
                         
-                        # Live poster
                         poster = get_poster_url(row['id'])
                         if poster:
                             st.image(poster, use_container_width=True)
@@ -271,7 +255,6 @@ def main():
                         rating = f"★ {row['vote_average']:.1f}" if row['vote_average'] > 0 else "N/A"
                         st.markdown(f"**{row['title']}**  \n{rating}")
                         
-                        # Trailer
                         trailer_url = get_trailer_url(row['id'])
                         if trailer_url:
                             st.markdown(f"[Watch Trailer 🎥]({trailer_url})", unsafe_allow_html=True)
