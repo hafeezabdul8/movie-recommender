@@ -6,9 +6,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import requests
 import json
 
-# ────────────────────────────────────────────────────────────────
-# Modern dark theme + responsive styling
-# ────────────────────────────────────────────────────────────────
+# Modern dark theme + responsive
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; color: #e0e0e0; }
@@ -27,31 +25,21 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.set_page_config(
-    page_title="Feezman Movie Recommender",
-    layout="wide",
-    initial_sidebar_state="auto"
-)
+st.set_page_config(page_title="Feezman Movie Recommender", layout="wide", initial_sidebar_state="auto")
 
-# ────────────────────────────────────────────────────────────────
 # Initialize session state
-# ────────────────────────────────────────────────────────────────
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
 
 if 'user_ratings' not in st.session_state:
     st.session_state.user_ratings = {}  # movie_id: rating (1-5)
 
-# ────────────────────────────────────────────────────────────────
 # TMDB Config
-# ────────────────────────────────────────────────────────────────
 TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 YOUTUBE_BASE = "https://www.youtube.com/watch?v="
 
-# ────────────────────────────────────────────────────────────────
-# Mood mapping (keep your existing)
-# ────────────────────────────────────────────────────────────────
+# Mood mapping
 MOOD_TO_GENRES = {
     'happy': {'comedy': 1.8, 'animation': 1.5, 'adventure': 1.3, 'musical': 1.5},
     'sad': {'drama': 2.0, 'romance': 1.8, 'family': 1.5},
@@ -73,9 +61,7 @@ def detect_mood_keywords(mood_text):
             detected[mood] = boosts
     return detected
 
-# ────────────────────────────────────────────────────────────────
 # Load data
-# ────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_and_prepare_data():
     df = pd.read_csv('tmdb_5000_movies.csv')
@@ -116,9 +102,6 @@ def build_similarity_matrix(df):
     cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
     return cosine_sim, df.reset_index(drop=True)
 
-# ────────────────────────────────────────────────────────────────
-# Poster & Trailer
-# ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400)
 def get_poster_url(movie_id):
     try:
@@ -153,9 +136,6 @@ def get_trailer_url(movie_id):
         pass
     return None
 
-# ────────────────────────────────────────────────────────────────
-# Recommendation function
-# ────────────────────────────────────────────────────────────────
 def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_genres=None):
     title_clean = title.lower().strip()
     
@@ -207,7 +187,7 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_g
 # ────────────────────────────────────────────────────────────────
 def main():
     st.title("🎬 FEEZMAN MOVIE RECOMMENDER")
-    st.markdown("Rate, save to watchlist & discover movies!")
+    st.markdown("Rate movies, save to watchlist & discover new ones!")
     
     df, all_genres = load_and_prepare_data()
     cosine_sim, df_indexed = build_similarity_matrix(df)
@@ -303,28 +283,28 @@ def main():
                         else:
                             st.caption("No trailer available")
                         
-                        # Watchlist button with rerun
+                        # Watchlist button with stable key & rerun
                         movie_id = row['id']
                         movie_title = row['title']
                         
                         if movie_id not in st.session_state.watchlist:
-                            if st.button("❤️ Add to Watchlist", key=f"add_{movie_id}_{i}"):
+                            if st.button("❤️ Add to Watchlist", key=f"add_watchlist_{movie_id}"):
                                 st.session_state.watchlist.append(movie_id)
-                                st.success(f"Added **{movie_title}**!")
+                                st.success(f"Added **{movie_title}** to Watchlist!")
                                 st.rerun()
                         else:
-                            if st.button("💔 Remove", key=f"remove_{movie_id}_{i}"):
+                            if st.button("💔 Remove from Watchlist", key=f"remove_watchlist_{movie_id}"):
                                 st.session_state.watchlist.remove(movie_id)
-                                st.success(f"Removed **{movie_title}**!")
+                                st.success(f"Removed **{movie_title}** from Watchlist!")
                                 st.rerun()
                         
-                        # User Rating (1-5 stars)
+                        # User Rating with stable key & rerun
                         current_rating = st.session_state.user_ratings.get(movie_id, 0)
                         st.markdown("**Your rating:**")
                         cols_rating = st.columns(5)
                         for star in range(1, 6):
                             with cols_rating[star-1]:
-                                if st.button(f"{'★' if star <= current_rating else '☆'}", key=f"rate_{movie_id}_{star}_{i}"):
+                                if st.button(f"{'★' if star <= current_rating else '☆'}", key=f"rate_{movie_id}_{star}"):
                                     st.session_state.user_ratings[movie_id] = star
                                     st.success(f"Rated **{movie_title}** {star} stars!")
                                     st.rerun()
