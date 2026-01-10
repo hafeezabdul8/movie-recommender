@@ -5,28 +5,65 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import requests
 
-from movie_app_poster import get_poster_url
-
-# Modern dark theme + responsive
+# ────────────────────────────────────────────────────────────────
+# Modern dark theme + responsive styling
+# ────────────────────────────────────────────────────────────────
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: #e0e0e0; }
-    .movie-card { background: #1e1e2e; border-radius: 12px; padding: 12px; margin: 8px 0; box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: transform 0.2s; }
-    .movie-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.5); }
-    .block-container { padding-left: 1rem !important; padding-right: 1rem !important; max-width: none !important; }
-    img { border-radius: 8px; object-fit: cover; width: 100%; height: auto; }
-    .stButton > button { background-color: #ff4b4b; color: white; border: none; border-radius: 8px; padding: 10px 20px; margin-top: 8px; }
+    .stApp {
+        background-color: #0e1117;
+        color: #e0e0e0;
+    }
+    .movie-card {
+        background: #1e1e2e;
+        border-radius: 12px;
+        padding: 12px;
+        margin: 8px 0;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        transition: transform 0.2s;
+    }
+    .movie-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    }
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: none !important;
+    }
+    img {
+        border-radius: 8px;
+        object-fit: cover;
+        width: 100%;
+        height: auto;
+    }
+    .stButton > button {
+        background-color: #ff4b4b;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 20px;
+        margin-top: 8px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="Feezman Movie Recommender", layout="wide", initial_sidebar_state="auto")
+st.set_page_config(
+    page_title="Feezman Movie Recommender",
+    layout="wide",
+    initial_sidebar_state="auto"
+)
 
-# TMDB Config
-TMDB_API_KEY = st.secrets["TMDB_API_KEY"]  # From secrets (your deployed key)
+# ────────────────────────────────────────────────────────────────
+# TMDB Configuration - Using secrets (for deployed version)
+# ────────────────────────────────────────────────────────────────
+TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 YOUTUBE_BASE = "https://www.youtube.com/watch?v="
 
-# Mood mapping (from previous)
+# ────────────────────────────────────────────────────────────────
+# Mood to Genre Boost Mapping
+# ────────────────────────────────────────────────────────────────
 MOOD_TO_GENRES = {
     'happy': {'comedy': 1.8, 'animation': 1.5, 'adventure': 1.3, 'musical': 1.5},
     'sad': {'drama': 2.0, 'romance': 1.8, 'family': 1.5},
@@ -39,6 +76,8 @@ MOOD_TO_GENRES = {
 }
 
 def detect_mood_keywords(mood_text):
+    if not mood_text:
+        return {}
     mood_text = mood_text.lower()
     detected = {}
     for mood, boosts in MOOD_TO_GENRES.items():
@@ -46,12 +85,15 @@ def detect_mood_keywords(mood_text):
             detected[mood] = boosts
     return detected
 
-# Data loading (same)
+# ────────────────────────────────────────────────────────────────
+# Load & prepare data
+# ────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_and_prepare_data():
     df = pd.read_csv('tmdb_5000_movies.csv')
     useful_cols = ['id', 'title', 'genres', 'overview', 'keywords', 'vote_average', 'vote_count']
     df = df[useful_cols]
+    
     df['overview'] = df['overview'].fillna('')
     df['genres'] = df['genres'].fillna('[]')
     df['keywords'] = df['keywords'].fillna('[]')
@@ -65,8 +107,12 @@ def load_and_prepare_data():
     
     df['combined_features'] = df['genres'] + ' ' + df['overview'] + ' ' + df['keywords']
     df = df[df['combined_features'].str.strip() != '']
+    
     return df
 
+# ────────────────────────────────────────────────────────────────
+# Build similarity matrix
+# ────────────────────────────────────────────────────────────────
 @st.cache_data
 def build_similarity_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english', max_features=5000)
@@ -74,22 +120,39 @@ def build_similarity_matrix(df):
     cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
     return cosine_sim, df.reset_index(drop=True)
 
-# New: Get trailer URL
+# ────────────────────────────────────────────────────────────────
+# Get current poster from TMDB API (live fetch)
+# ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=86400)  # Cache for 1 day
+def get_poster_url(movie_id):
+    try:
+        url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}&language=en-US"
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        poster_path = data.get('poster_path')
+        if poster_path:
+            return TMDB_IMAGE_BASE + poster_path
+    except:
+        pass
+    return None
+
+# ────────────────────────────────────────────────────────────────
+# Get trailer URL
+# ────────────────────────────────────────────────────────────────
+@st.cache_data(ttl=86400)
 def get_trailer_url(movie_id):
     try:
         url = f"https://api.themoviedb.org/3/movie/{movie_id}/videos?api_key={TMDB_API_KEY}&language=en-US"
         response = requests.get(url, timeout=5)
         data = response.json()
         results = data.get('results', [])
-        
-        # Prefer official trailer, then any trailer
+        # Prefer official trailer
         for video in results:
             if video.get('site') == 'YouTube' and video.get('type') == 'Trailer':
                 key = video.get('key')
                 if key:
                     return f"https://www.youtube.com/watch?v={key}"
-        # Fallback to first YouTube video if no trailer
+        # Fallback to any YouTube video
         for video in results:
             if video.get('site') == 'YouTube':
                 key = video.get('key')
@@ -99,10 +162,13 @@ def get_trailer_url(movie_id):
         pass
     return None
 
-# Recommendation function (with mood)
+# ────────────────────────────────────────────────────────────────
+# Recommendation function with mood boost
+# ────────────────────────────────────────────────────────────────
 def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None):
     title_clean = title.lower().strip()
     
+    # Try exact match
     exact_match = df[df['title'].str.lower().str.strip() == title_clean]
     
     if not exact_match.empty:
@@ -110,16 +176,19 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None):
         selected_title = selected['title']
         idx = exact_match.index[0]
     else:
+        # Partial match, sorted by popularity
         partial_matches = df[df['title'].str.lower().str.contains(title_clean, na=False)]
         if partial_matches.empty:
-            return None, None, f"No movie found containing '{title}' 😢"
+            return None, None, f"No movie found containing '{title}' 😢 Try 'Avatar', 'Inception', 'The Dark Knight'"
         partial_matches = partial_matches.sort_values('vote_count', ascending=False)
         selected = partial_matches.iloc[0]
         selected_title = selected['title']
         idx = selected.name
     
+    # Base similarity
     sim_scores = list(enumerate(cosine_sim[idx]))
     
+    # Apply mood boost
     if mood_boosts:
         mood_boost_scores = np.zeros(len(df))
         for boosts in mood_boosts.values():
@@ -131,6 +200,7 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None):
         combined_scores = [0.7 * s + 0.3 * mood_boost_scores[i] for i, s in sim_scores]
         sim_scores = list(enumerate(combined_scores))
     
+    # Sort & skip self
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
     sim_scores = [s for s in sim_scores if s[0] != idx][:n]
     
@@ -139,25 +209,31 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None):
     
     return recommendations, selected_title, None
 
+# ────────────────────────────────────────────────────────────────
 # Main UI
+# ────────────────────────────────────────────────────────────────
 def main():
     st.title("🎬 FEEZMAN MOVIE RECOMMENDER")
-    st.markdown("Find movies you'll love – with posters & trailers!")
+    st.markdown("Find movies you'll love – with real posters & trailers!")
     
     df = load_and_prepare_data()
     cosine_sim, df_indexed = build_similarity_matrix(df)
     
     movie_list = sorted(df['title'].unique().tolist())
-    movie_title = st.selectbox("Choose or type a movie you love:", options=movie_list)
+    movie_title = st.selectbox(
+        "Choose or type a movie you love:",
+        options=movie_list,
+        help="Start typing to search (e.g. Pirates of the Caribbean, Avatar)"
+    )
     
-    mood_input = st.text_input("How are you feeling? (e.g. sad, excited, romantic...)", "")
+    mood_input = st.text_input("How are you feeling? (optional)", "")
     
     n_recs = st.slider("Number of recommendations", 4, 12, 7)
     
     if st.button("Get Recommendations ✨"):
         mood_boosts = detect_mood_keywords(mood_input) if mood_input else None
         
-        with st.spinner("Finding movies & trailers..."):
+        with st.spinner("Finding perfect matches..."):
             recommendations, selected_title, error = get_recommendations(
                 movie_title, df_indexed, cosine_sim, n_recs, mood_boosts
             )
@@ -167,11 +243,9 @@ def main():
             else:
                 st.subheader(f"Movies similar to: **{selected_title}**")
                 
+                # Responsive columns
                 screen_width = st.session_state.get('screen_width', 1200)
-                num_cols = 4
-                if screen_width < 480: num_cols = 1
-                elif screen_width < 768: num_cols = 2
-                elif screen_width < 1024: num_cols = 3
+                num_cols = 4 if screen_width >= 1024 else 3 if screen_width >= 768 else 2 if screen_width >= 480 else 1
                 
                 cols = st.columns(num_cols)
                 
@@ -180,13 +254,24 @@ def main():
                     with col:
                         st.markdown('<div class="movie-card">', unsafe_allow_html=True)
                         
+                        # Live poster
                         poster = get_poster_url(row['id'])
-                        st.image(poster if poster else "https://via.placeholder.com/300x450?text=No+Poster", use_container_width=True)
+                        if poster:
+                            st.image(poster, use_container_width=True)
+                        else:
+                            st.image(
+                                "https://via.placeholder.com/300x450/1e1e2e/ffffff?text=No+Poster+Available",
+                                use_container_width=True
+                            )
+                            st.markdown(
+                                f"[View on TMDB](https://www.themoviedb.org/movie/{row['id']})",
+                                unsafe_allow_html=True
+                            )
                         
                         rating = f"★ {row['vote_average']:.1f}" if row['vote_average'] > 0 else "N/A"
                         st.markdown(f"**{row['title']}**  \n{rating}")
                         
-                        # Trailer button
+                        # Trailer
                         trailer_url = get_trailer_url(row['id'])
                         if trailer_url:
                             st.markdown(f"[Watch Trailer 🎥]({trailer_url})", unsafe_allow_html=True)
