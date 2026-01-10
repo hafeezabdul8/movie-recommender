@@ -22,7 +22,7 @@ st.markdown("""
 st.set_page_config(page_title="Feezman Movie Recommender", layout="wide", initial_sidebar_state="auto")
 
 # TMDB Config
-TMDB_API_KEY = st.secrets["7e4c7f413d3fbee94f9d6106052b7273"]  # From secrets (your deployed key)
+TMDB_API_KEY = st.secrets["TMDB_API_KEY"]  # From secrets (your deployed key)
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 YOUTUBE_BASE = "https://www.youtube.com/watch?v="
 
