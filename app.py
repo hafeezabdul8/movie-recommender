@@ -47,6 +47,7 @@ st.markdown("""
         margin-top: 8px;
     }
     </style>
+    <meta name="google-site-verification" content="9UcbS7PTos1bwfWXSYeBP7wh7FZK72xk-lgPwL2H72M" />
 """, unsafe_allow_html=True)
 
 st.set_page_config(
