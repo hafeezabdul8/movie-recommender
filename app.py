@@ -6,18 +6,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 import requests
 import json
 
-# Modern dark theme + responsive
+# Modern dark theme
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; color: #e0e0e0; }
-    .movie-card {
-        background: #1e1e2e;
-        border-radius: 12px;
-        padding: 12px;
-        margin: 8px 0;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-        transition: transform 0.2s;
-    }
+    .movie-card { background: #1e1e2e; border-radius: 12px; padding: 12px; margin: 8px 0; box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: transform 0.2s; }
     .movie-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.5); }
     .block-container { padding-left: 1rem !important; padding-right: 1rem !important; max-width: none !important; }
     img { border-radius: 8px; object-fit: cover; width: 100%; height: auto; }
@@ -32,7 +25,7 @@ if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
 
 if 'user_ratings' not in st.session_state:
-    st.session_state.user_ratings = {}  # movie_id: rating (1-5)
+    st.session_state.user_ratings = {}
 
 # TMDB Config
 TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
@@ -61,8 +54,7 @@ def detect_mood_keywords(mood_text):
             detected[mood] = boosts
     return detected
 
-# Load data
-@st.cache_data
+# Load data - NO CACHE to fix update issue
 def load_and_prepare_data():
     df = pd.read_csv('tmdb_5000_movies.csv')
     useful_cols = ['id', 'title', 'genres', 'overview', 'keywords', 'vote_average', 'vote_count']
@@ -95,7 +87,6 @@ def load_and_prepare_data():
     
     return df, all_genres
 
-@st.cache_data
 def build_similarity_matrix(df):
     tfidf = TfidfVectorizer(stop_words='english', max_features=5000)
     tfidf_matrix = tfidf.fit_transform(df['combined_features'])
@@ -182,12 +173,10 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_g
     
     return recommendations, selected_title, None
 
-# ────────────────────────────────────────────────────────────────
 # Main UI
-# ────────────────────────────────────────────────────────────────
 def main():
     st.title("🎬 FEEZMAN MOVIE RECOMMENDER")
-    st.markdown("Rate movies, save to watchlist & discover new ones!")
+    st.markdown("Rate, save & discover movies!")
     
     df, all_genres = load_and_prepare_data()
     cosine_sim, df_indexed = build_similarity_matrix(df)
@@ -283,7 +272,7 @@ def main():
                         else:
                             st.caption("No trailer available")
                         
-                        # Watchlist button with stable key & rerun
+                        # Watchlist button
                         movie_id = row['id']
                         movie_title = row['title']
                         
@@ -298,7 +287,7 @@ def main():
                                 st.success(f"Removed **{movie_title}** from Watchlist!")
                                 st.rerun()
                         
-                        # User Rating with stable key & rerun
+                        # User Rating
                         current_rating = st.session_state.user_ratings.get(movie_id, 0)
                         st.markdown("**Your rating:**")
                         cols_rating = st.columns(5)
