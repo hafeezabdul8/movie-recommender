@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 
 components.html("""
 <head>
-<meta name="google-site-verification" content="google815e2d5d585d9ef9.html">
+<meta name="google-site-verification" content="9UcbS7PTos1bwfWXSYeBP7wh7FZK72xk-lgPwL2H72M" />
 </head>
 """, height=0)
 
