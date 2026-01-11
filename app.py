@@ -8,11 +8,19 @@ import json
 import streamlit as st
 import streamlit.components.v1 as components
 
+
+
 components.html("""
-<head>
-<meta name="google-site-verification" content="9UcbS7PTos1bwfWXSYeBP7wh7FZK72xk-lgPwL2H72M" />
-</head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-XXXXXXXXXX');
+</script>
 """, height=0)
+
 
 
 # ────────────────────────────────────────────────────────────────
