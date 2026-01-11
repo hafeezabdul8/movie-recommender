@@ -5,15 +5,19 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import requests
 import json
+import streamlit as st
+import streamlit.components.v1 as components
+
+components.html("""
+<head>
+<meta name="google-site-verification" content="google815e2d5d585d9ef9.html">
+</head>
+""", height=0)
+
 
 # ────────────────────────────────────────────────────────────────
 # Modern dark theme + responsive styling
 # ────────────────────────────────────────────────────────────────
-st.markdown(
-    '<meta name="google-site-verification" content="9UcbS7PTos1bwfWXSYeBP7wh7FZK72xk-lgPwL2H72M" />',
-    unsafe_allow_html=True
-)
-
 st.markdown("""
     <style>
     .stApp {
