@@ -65,7 +65,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.set_page_config(
-    page_title="Feeezman Movie Recommender - Find Movies with Posters & Trailers",
+    page_title="Feezman Movie Recommender - Find Movies with Posters & Trailers",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="auto"
