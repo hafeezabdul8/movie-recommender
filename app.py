@@ -5,69 +5,67 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import requests
 import json
-import streamlit as st
 import streamlit.components.v1 as components
 
 
+GA_MEASUREMENT_ID = "G-FB1SZP3DL3"  
 
-components.html("""
+components.html(f"""
 <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id={GA_MEASUREMENT_ID}"></script>
 <script>
-window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
-gtag('config', 'G-XXXXXXXXXX');
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){{dataLayer.push(arguments);}}
+  gtag('js', new Date());
+  gtag('config', '{GA_MEASUREMENT_ID}');
 </script>
 """, height=0)
-
-
 
 # ────────────────────────────────────────────────────────────────
 # Modern dark theme + responsive styling
 # ────────────────────────────────────────────────────────────────
 st.markdown("""
     <style>
-    .stApp {
+    .stApp {{
         background-color: #0e1117;
         color: #e0e0e0;
-    }
-    .movie-card {
+    }}
+    .movie-card {{
         background: #1e1e2e;
         border-radius: 12px;
         padding: 12px;
         margin: 8px 0;
         box-shadow: 0 4px 15px rgba(0,0,0,0.4);
         transition: transform 0.2s;
-    }
-    .movie-card:hover {
+    }}
+    .movie-card:hover {{
         transform: translateY(-5px);
         box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-    }
-    .block-container {
+    }}
+    .block-container {{
         padding-left: 1rem !important;
         padding-right: 1rem !important;
         max-width: none !important;
-    }
-    img {
+    }}
+    img {{
         border-radius: 8px;
         object-fit: cover;
         width: 100%;
         height: auto;
-    }
-    .stButton > button {
+    }}
+    .stButton > button {{
         background-color: #ff4b4b;
         color: white;
         border: none;
         border-radius: 8px;
         padding: 10px 20px;
         margin-top: 8px;
-    }
+    }}
     </style>
 """, unsafe_allow_html=True)
 
 st.set_page_config(
-    page_title="Feezman Movie Recommender - Find Movies with Posters & Trailers",
+    page_title="Feeezman Movie Recommender - Find Movies with Posters & Trailers",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="auto"
@@ -237,7 +235,7 @@ def get_recommendations(title, df, cosine_sim, n=8, mood_boosts=None, selected_g
     return recommendations, selected_title, None
 
 # ────────────────────────────────────────────────────────────────
-# Main UI (cleaned - no watchlist/ratings)
+# Main UI
 # ────────────────────────────────────────────────────────────────
 def main():
     st.title("🎬 FEEZMAN MOVIE RECOMMENDER")
